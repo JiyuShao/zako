@@ -1,3 +1,5 @@
+[简体中文](README.md) · [English](README.en.md)
+
 <h1 align="center">Zako Shell Companion</h1>
 
 <p align="center">
