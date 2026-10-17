@@ -1,20 +1,30 @@
-#[macro_use]
-extern crate lazy_static;
+mod cli;
+mod config;
+mod context;
+mod correction;
+mod interaction;
+mod persona;
 
-use crate::shell::Shell;
-use log::debug;
-
-use crate::utils::config::Config;
-use crate::utils::log::init_logger;
-
-mod shell;
-mod utils;
-
-fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let config = Config::new();
-    init_logger(&config);
-    debug!("配置加载成功 {}", config.config_dir.display());
-
-    let mut shell = Shell::new(&config);
-    shell.run()
+fn main() {
+    let mut arguments: Vec<String> = std::env::args().skip(1).collect();
+    let shell_transport = arguments
+        .first()
+        .is_some_and(|arg| arg == "--shell-transport");
+    if shell_transport {
+        arguments.remove(0);
+        if !matches!(
+            arguments.first().map(String::as_str),
+            Some("session" | "event")
+        ) {
+            eprintln!("zako: shell transport only supports session/event");
+            std::process::exit(1);
+        }
+    }
+    if let Err(error) = cli::run(arguments) {
+        eprintln!("zako: {error}");
+        std::process::exit(1);
+    }
+    if shell_transport {
+        println!("S:0");
+    }
 }
