@@ -10,6 +10,7 @@ _zako_init() {
     return 0
   }
   typeset -g _ZAKO_INITIALIZED=1 _ZAKO_ENABLED=0 _ZAKO_FAILURES=0
+  typeset -g _ZAKO_STATS_JSON='{}'
   typeset -g _ZAKO_BINARY=$commands[zako] _ZAKO_CONFIG_JSON='' _ZAKO_REPLY=''
   typeset -g _ZAKO_MOOD=idle _ZAKO_LAST_COMMAND='' _ZAKO_LAST_INTERACTION_MS=0
   typeset -g _ZAKO_PROMPT_MARKER='' _ZAKO_RENDERED_RPROMPT='' _ZAKO_PROMPT_OWNED=0
@@ -116,7 +117,7 @@ _zako_init() {
     local -a fields
     _zako_call session || { _zako_disable_error; return 1; }
     fields=("${(@ps:\x1f:)_ZAKO_REPLY}")
-    (( ${#fields} == 6 )) && [[ $fields[1] == 1 && $fields[2] == (0|1) && $fields[3] == (auto|off) ]] \
+    (( ${#fields} == 6 )) && [[ $fields[1] == 2 && $fields[2] == (0|1) && $fields[3] == (auto|off) ]] \
       && _zako_valid_fields "${fields[@]}" && _zako_valid_marker "$fields[4]" || { _zako_disable_error; return 1; }
     _ZAKO_ENABLED=$fields[2]
     _ZAKO_PROMPT_MODE=$fields[3]
@@ -130,11 +131,14 @@ _zako_init() {
     emulate -L zsh
     local line=$1
     # Compound commands still expire an old correction target.
-    [[ $line != *[\;\|\&\(\)\$\`\<\>\$'\n']* ]] || return 1
+    [[ $line != *[\;\|\&\(\)\$\`\<\>]* && $line != *$'\n'* ]] || return 1
     local -a words
     words=("${(@z)line}")
     [[ $words[1] == command ]] && words=("${words[@]:1}")
-    [[ $words[1] == zako ]] && (( ${#words} <= 2 ))
+    if [[ $words[1] == zako && ${#words} -le 2 ]]; then
+      return 0
+    fi
+    [[ $words[1] == zako && ( $words[2] == config || ( ${#words} == 3 && $words[2] == stats && $words[3] == (reset|--json) ) ) ]]
   }
   _zako_preexec() {
     emulate -L zsh
@@ -143,7 +147,11 @@ _zako_init() {
       return 0
     fi
     _zako_clear_target
-    if (( _ZAKO_ENABLED )); then _ZAKO_LAST_COMMAND=$1; else _ZAKO_LAST_COMMAND=''; fi
+    if (( _ZAKO_ENABLED )); then
+      _ZAKO_LAST_COMMAND=$1
+    else
+      _ZAKO_LAST_COMMAND=''
+    fi
     return 0
   }
   _zako_precmd() {
@@ -158,19 +166,20 @@ _zako_init() {
       _zako_render_prompt
       return 0
     fi
-    _zako_call event --protocol-version 1 --config-json "$_ZAKO_CONFIG_JSON" \
+    _zako_call event --protocol-version 2 --config-json "$_ZAKO_CONFIG_JSON" --stats-json "$_ZAKO_STATS_JSON" \
       --command "$command_line" --exit-code "$final_status" --failures "$_ZAKO_FAILURES" \
       --now-ms "$now" --last-interaction-ms "$_ZAKO_LAST_INTERACTION_MS" || {
         _zako_disable_error
         return 0
       }
     fields=("${(@ps:\x1f:)_ZAKO_REPLY}")
-    if (( ${#fields} != 13 )) || [[ $fields[1] != 1 || $fields[2] != (idle|happy|annoyed|concerned|proud) \
+    if (( ${#fields} != 14 )) || [[ $fields[1] != 2 || $fields[2] != (idle|happy|annoyed|concerned|proud) \
       || $fields[3] != <0-4294967295> || $fields[4] != (success|interrupted|neutral|correctable|unknown|disabled) \
       || $fields[7] != (0|1|2|3) ]] || ! _zako_valid_fields "${fields[@]}" || ! _zako_valid_marker "$fields[6]"; then
       _zako_disable_error
       return 0
     fi
+    [[ $fields[14] == \{*\} && ${#fields[14]} -le 4096 ]] || { _zako_disable_error; return 0; }
     count=$fields[7]
     if { (( count > 0 )) && [[ $fields[4] != correctable ]]; } || { (( count == 0 )) && [[ $fields[4] == correctable ]]; }; then
       _zako_disable_error
@@ -188,6 +197,7 @@ _zako_init() {
     _ZAKO_MOOD=$fields[2]
     _ZAKO_FAILURES=$fields[3]
     _ZAKO_PROMPT_MARKER=$fields[6]
+    _ZAKO_STATS_JSON=$fields[14]
     if [[ -n $fields[5] ]]; then
       print -r -- "$fields[5]"
       _ZAKO_LAST_INTERACTION_MS=$now
@@ -227,6 +237,22 @@ _zako_init() {
         else print -r -- '当前没有可用的高置信度纠错建议。'; fi
         ;;
       status) print -r -- "enabled=$_ZAKO_ENABLED mood=$_ZAKO_MOOD failures=$_ZAKO_FAILURES" ;;
+      stats)
+        case ${2-} in
+          reset)
+            (( $# == 2 )) || { print -ru2 -- '用法：zako stats [reset|--json]'; return 1; }
+            _ZAKO_STATS_JSON='{}'
+            print -r -- 'Zako 会话统计已清零。'
+            ;;
+          ''|--json)
+            (( $# <= 2 )) || { print -ru2 -- '用法：zako stats [reset|--json]'; return 1; }
+            local -a format=()
+            [[ ${2-} == --json ]] && format=(--json)
+            command "$_ZAKO_BINARY" stats --stats-json "$_ZAKO_STATS_JSON" --config-json "$_ZAKO_CONFIG_JSON" "${format[@]}"
+            ;;
+          *) print -ru2 -- '用法：zako stats [reset|--json]'; return 1 ;;
+        esac
+        ;;
       doctor)
         print -r -- "session: enabled=$_ZAKO_ENABLED; hooks: preexec=${preexec_functions[(I)_zako_preexec]} precmd=${precmd_functions[(I)_zako_precmd]} chpwd=${chpwd_functions[(I)_zako_chpwd]}"
         print -r -- "session prompt: $_ZAKO_PROMPT_REASON; marker=\${_ZAKO_PROMPT_MARKER}"

@@ -30,4 +30,8 @@ git show legacy-shell
 
 本次交付按用户明确授权安装到 `~/.cargo/bin/zako`，并在真实 `.zshrc` 末尾追加带 `Zako Shell Companion` 标记的初始化块；执行前保留完整备份。备份位置和验收结果见 [M1 验收记录](milestones/M1-acceptance.md)。产品 CLI 自身不修改启动文件。
 
-当前会话执行 `zako off` 即停用。永久停用时删除该标记块，再打开新终端；无需删除其他插件初始化。卸载二进制可执行 `cargo uninstall zakosh`。回退旧实现前先移除新初始化块，避免调用旧版不支持的 `init` 子命令。
+当前会话执行 `zako off` 即停用。永久停用时删除该标记块，再打开新终端；无需删除其他插件初始化。卸载二进制可执行 `cargo uninstall zako`。回退旧实现前先移除新初始化块，避免调用旧版不支持的 `init` 子命令。
+
+## Cargo 包名统一
+
+Cargo 包名与可执行命令名统一为 `zako`。已经安装旧包的用户，可在源码目录运行 `cargo install --locked --path . --force` 更新安装归属；之后使用 `cargo uninstall zako` 卸载。

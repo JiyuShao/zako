@@ -13,6 +13,7 @@ pub struct Config {
     pub prompt: Prompt,
     pub correction: Correction,
     pub privacy: Privacy,
+    pub session: Session,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -30,6 +31,31 @@ pub struct Interaction {
     pub cooldown_seconds: u64,
     pub startup_greeting: bool,
     pub consecutive_failure_tip: bool,
+    pub failure_escalation: bool,
+    pub command_commentary: bool,
+    pub failure_budget: bool,
+    pub failure_budget_count: usize,
+    pub failure_window_seconds: u64,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct Session {
+    pub enabled: bool,
+    pub achievements: bool,
+    pub success_streak_goal: u32,
+    pub failure_milestone: u32,
+}
+
+impl Default for Session {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            achievements: true,
+            success_streak_goal: 5,
+            failure_milestone: 10,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -37,6 +63,7 @@ pub struct Interaction {
 pub struct Persona {
     pub style: String,
     pub nickname: String,
+    pub intensity: u8,
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -78,6 +105,11 @@ impl Default for Interaction {
             cooldown_seconds: 20,
             startup_greeting: true,
             consecutive_failure_tip: true,
+            failure_escalation: true,
+            command_commentary: true,
+            failure_budget: true,
+            failure_budget_count: 5,
+            failure_window_seconds: 60,
         }
     }
 }
@@ -85,8 +117,9 @@ impl Default for Interaction {
 impl Default for Persona {
     fn default() -> Self {
         Self {
-            style: "normal".to_string(),
+            style: "brat".to_string(),
             nickname: "杂鱼".to_string(),
+            intensity: 3,
         }
     }
 }
@@ -205,9 +238,23 @@ impl Config {
                 "interaction.profile 必须是 quiet、active 或 chatty".to_string(),
             ));
         }
-        if !["gentle", "normal", "spicy"].contains(&self.persona.style.as_str()) {
+        if !["gentle", "normal", "brat", "spicy"].contains(&self.persona.style.as_str()) {
             return Err(ConfigError::Invalid(
-                "persona.style 必须是 gentle、normal 或 spicy".to_string(),
+                "persona.style 必须是 gentle、normal 或 brat".to_string(),
+            ));
+        }
+        if !(1..=5).contains(&self.persona.intensity) {
+            return Err(ConfigError::Invalid(
+                "persona.intensity 必须在 1 到 5 之间".to_string(),
+            ));
+        }
+        if !(2..=100).contains(&self.interaction.failure_budget_count)
+            || !(1..=3600).contains(&self.interaction.failure_window_seconds)
+            || !(2..=1000).contains(&self.session.success_streak_goal)
+            || !(2..=1000).contains(&self.session.failure_milestone)
+        {
+            return Err(ConfigError::Invalid(
+                "失败预算次数必须为 2–100，窗口为 1–3600 秒，成就阈值为 2–1000".into(),
             ));
         }
         if !["auto", "off"].contains(&self.prompt.mode.as_str()) {

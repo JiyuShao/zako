@@ -1,7 +1,7 @@
 <h1 align="center">Zako Shell Companion</h1>
 
 <p align="center">
-  <strong>给你的终端，加一点傲娇。</strong><br />
+  <strong>终端里的雌小鬼，陪你写代码。</strong><br />
   A little attitude for your Zsh.
 </p>
 
@@ -19,7 +19,7 @@
   <a href="#参与贡献">参与贡献</a>
 </p>
 
-Zako 是一个用 Rust 编写的轻量 Zsh 终端搭档：启动时打个招呼，命令完成时偶尔点评，连续失败时提醒你，并为 `gti`、`git comit` 这类拼写错误提供纠错建议。
+Zako 是一个用 Rust 编写的轻量 Zsh 雌小鬼终端搭档：启动时打个招呼，命令完成时偶尔点评，连续失败时会越来越不客气，并为 `gti`、`git comit` 这类拼写错误提供纠错建议。
 
 它依附于你现有的 Zsh，通过 Hook 接收命令事件；命令执行、补全和作业控制都由 Zsh 负责。当前为 **0.1.0 早期版本**，角色台词支持简体中文。
 
@@ -30,7 +30,7 @@ Zako 是一个用 Rust 编写的轻量 Zsh 终端搭档：启动时打个招呼�
 ```console
 ❯ gti status
 zsh: command not found: gti
-命令拼写好像不对，我给你找了个可能的写法。
+连命令都能打错？杂鱼，运行 `zako fix`，自己确认候选再输入。
 ❯ zako fix
 建议：git status
 原因：命令名可能是 git
@@ -39,9 +39,58 @@ zsh: command not found: gti
 
 你决定是否采用建议，再自行输入命令。下一条普通命令开始、切换目录或关闭 Zako 后，旧建议会失效。
 
+### 雌小鬼的日常
+
+默认强度为 3，称呼是“杂鱼”。例如，连续输错三次：
+
+```console
+❯ false
+这都能失败？杂鱼，先别乱按，看看错误输出。
+❯ false
+❯ false
+连续失败 3 次了。杂鱼，承认需要本小姐提醒了吧？先看错误输出。
+```
+
+第二次反馈受默认 20 秒冷却限制，第三次连续失败会提醒一次。成功了也别指望她坦率夸你，以下是其他场景的台词片段：
+
+| 场景 | 台词（强度 3） |
+| --- | --- |
+| 打开终端 | ♡ 嘿，杂鱼，今天也别把代码写坏了哦？ |
+| 普通命令成功 | 哼，杂鱼，勉强算你做对了，别以为本小姐会一直夸你。 |
+| 测试或提交成功 | 居然成功了？杂鱼，别得意，本小姐只是刚好在看。 |
+| 连续成功 5 次 | 成就解锁：连胜小天才（连续成功 5 次）。杂鱼，别误会，本小姐只是替你记着，才没有偷偷鼓掌。 |
+| 60 秒内失败 5 次 | 60 秒内已有 5 次失败。杂鱼，失败预算都刷光了，还想抽成功保底？先停下来排查。 |
+
+事件台词受互动档位、成功反馈概率和冷却限制；每条命令最多一条反馈，纠错优先。成就与失败预算的触发规则见[角色反馈](#角色反馈)。
+
+同样是第一次失败，五档强度的区别是：
+
+| 强度 | 台词（`persona.style = "brat"`） |
+| --- | --- |
+| 1 · 轻逗 | 杂鱼，这次没成功，看看错误输出吧。 |
+| 2 · 嘴硬 | 哼，杂鱼，命令没有成功，检查一下输入。 |
+| 3 · 挑衅 | 这都能失败？杂鱼，先别乱按，看看错误输出。 |
+| 4 · 奚落 | 杂鱼，这就翻车了？手速挺快，检查输入的速度跟上了吗？ |
+| 5 · 火力全开 | 噗，杂鱼，回车的气势倒是满分，结果就这？先把错误输出读明白。 |
+
+想让她更不客气，或换个称呼：
+
+```sh
+zako config set persona.intensity 5
+zako config set persona.nickname "小菜鸡"
+```
+
+新开终端后，问候就会变成：
+
+```text
+♡ 来了呀，小菜鸡？键盘都准备好了，就等你贡献笑话了。
+```
+
 ## 特性
 
-- **有性格的陪伴**：启动问候、五种角色状态，以及成功、失败和连续事件的反馈。
+- **雌小鬼式陪伴**：嘴硬、挑衅、偶尔夸你，但命令失败时仍会给出有用的下一步。
+- **可调的强度**：`persona.intensity` 支持 1–5 级；失败升级、命令类型点评和会话统计都能单独开关。
+- **会话战报与成就**：查看失败类型排行、连续成功纪录，解锁嘴硬式夸奖；失败预算耗尽时提醒你停下来排查。
 - **可调节的互动**：默认普通成功反馈概率为 35%，普通台词间隔至少 20 秒；互动频率与语气分别配置。
 - **保守的纠错**：识别少量简单命令名和固定 Git 子命令拼写，最多展示三条候选及原因。
 - **保留输入习惯**：沿用现有主题、Tab 补全和快捷键；右侧 Prompt 空闲时显示角色状态。
@@ -100,16 +149,23 @@ zako doctor
 | `zako on` | 开启当前 Shell 会话中的 Zako |
 | `zako off` | 立即关闭，并清除待纠错建议和自动 Prompt 装饰 |
 | `zako status` | 查看当前会话的开关、角色状态与连续失败次数 |
+| `zako stats` | 查看当前 Shell 的结果统计、失败类型排行、成就与连胜纪录 |
+| `zako stats reset` | 清零当前 Shell 的临时统计 |
+| `zako config init` | 生成带注释的配置，已有文件不会覆盖 |
+| `zako config set persona.intensity 5` | 调整语气强度，校验后保存 |
+| `zako config show` / `path` | 查看完整有效配置或文件位置 |
 | `zako doctor` | 检查配置、Hook 和 Prompt 接入情况 |
 | `zako --help` | 查看 CLI 帮助 |
 
-这些会话命令需先加载 Zsh 集成。开关只影响当前 Shell；长期默认关闭可设置 `general.enabled = false`。
+`fix/on/off/status/stats` 需先加载 Zsh 集成；`config` 可直接使用。开关只影响当前 Shell；长期默认关闭可设置 `general.enabled = false`。
 
 ### 角色反馈
 
 默认在空闲的右侧 Prompt 显示简短 ASCII 表情，例如 `:3`、`:)` 和 `:/`。设置 `prompt.ascii_fallback = false` 后，可显示 `♡ (¬_¬)` 等 Unicode 表情。
 
-成功命令会打断连续失败计数；Ctrl+C 和能明确识别的正常非零结果（例如简单 `grep` 无匹配、`diff` 有差异）也会重置计数。第三次连续失败可触发一次帮助提醒，之后普通反馈继续受冷却限制。纠错提示优先，主动执行 `zako fix` 不受限流。
+成功命令会打断连续失败计数；Ctrl+C 和能明确识别的正常非零结果（例如简单 `grep` 无匹配、`diff` 有差异）也会重置计数。第三次连续失败可触发一次提醒，之后普通反馈继续受冷却限制。默认 60 秒内累计 5 次失败会触发失败预算提醒，每个窗口最多一次，仍受冷却限制；不会阻止命令执行。纠错提示优先，主动执行 `zako fix` 不受限流。
+
+默认连续成功 5 次解锁“连胜小天才”，累计失败 10 次解锁“不服输的杂鱼”，每种成就每会话只解锁一次。`zako stats` 可查看已解锁成就和 Git/Cargo/Docker/rm/sudo/other 失败排行；中性结果与中断单列，不算失败。成就台词也受静默与冷却限制，已解锁状态仍可在统计里查看。关闭 Zako 期间不统计，`zako stats reset` 清零战报、成就和失败预算；不同终端互相独立。
 
 ### 纠错范围
 
@@ -119,7 +175,24 @@ Zako 不注册 Tab、Alt+Z 或其他 ZLE 快捷键，也不会把建议写入编
 
 ## 配置
 
-默认配置文件为 `~/.config/zako/config.toml`。支持只填写需要修改的字段，例如：
+默认配置文件为 `~/.config/zako/config.toml`。可以直接用命令配置，无需手改 TOML：
+
+```sh
+zako config init                         # 可选：生成完整带注释配置，不覆盖已有文件
+zako config set persona.intensity 5      # 1 轻逗 / 2 嘴硬 / 3 挑衅 / 4 奚落 / 5 火力全开
+zako config set persona.nickname "小菜鸡"
+zako config set interaction.profile chatty
+zako config set interaction.cooldown_seconds 5
+zako config set interaction.failure_budget false
+zako config set session.achievements false
+zako config set session.enabled false    # 关闭会话统计与成就
+zako config show
+zako config path
+```
+
+`set` 保留配置注释，拒绝无效键和值，校验失败时文件不变。配置是符号链接时请直接编辑目标文件。上述修改在**新开终端后生效**，现有会话继续使用原配置。完整注释见 [config.example.toml](config.example.toml)。
+
+也支持只填写需要修改的字段，例如：
 
 ```toml
 [interaction]
@@ -135,28 +208,42 @@ ascii_fallback = false
 <summary>展开完整默认配置</summary>
 
 ```toml
+# Zako 雌小鬼终端搭档。修改后新开终端生效。
+# 也可以使用：zako config set persona.intensity 5
 [general]
 enabled = true
-language = "zh-CN"               # 当前仅支持简体中文
+language = "zh-CN"
 
 [interaction]
-profile = "active"              # quiet | active | chatty
-success_probability = 0.35       # 0.0–1.0
-cooldown_seconds = 20
+profile = "active"               # quiet | active | chatty
+success_probability = 0.35        # 0.0–1.0；chatty 忽略此概率
+cooldown_seconds = 20             # 普通反馈最小间隔，0–86400
 startup_greeting = true
-consecutive_failure_tip = true
+consecutive_failure_tip = true    # 第三次连续失败时提醒一次
+failure_escalation = true         # 失败次数越多，语气越强
+command_commentary = true         # Git/Cargo/Docker/rm/sudo 点评
+failure_budget = true             # 时间窗口内失败过多时提醒
+failure_budget_count = 5          # 2–100
+failure_window_seconds = 60       # 1–3600；预算提醒仍受冷却限制
 
 [persona]
-style = "normal"                # gentle | normal | spicy
-nickname = "杂鱼"                # 帮助提醒中的称呼
+style = "brat"                   # gentle | normal | brat；兼容旧 spicy
+nickname = "杂鱼"                 # 对用户的称呼，最多 64 字
+intensity = 3                     # 1 轻逗、2 嘴硬、3 挑衅、4 奚落、5 火力全开
+
+[session]
+enabled = true                   # 会话统计；false 时也关闭成就
+achievements = true              # 每种成就每次会话/清零后只解锁一次
+success_streak_goal = 5           # 2–1000；连续成功成就
+failure_milestone = 10            # 2–1000；累计失败成就
 
 [prompt]
-mode = "auto"                   # auto | off
+mode = "auto"                    # auto | off
 ascii_fallback = true
 
 [correction]
 enabled = true
-max_suggestions = 3             # 1–3
+max_suggestions = 3              # 1–3
 
 [privacy]
 persist_command_history = false
@@ -164,7 +251,7 @@ telemetry = false
 capture_command_output = false
 ```
 
-当前版本要求三个隐私选项均为 `false`，未知配置键会报错。
+当前版本要求三个隐私选项均为 `false`，未知配置键会报错。统计只保存在当前 Shell 内存中，不写入文件；关闭终端即丢弃。`style` 决定风格，`intensity` 调整 `brat` 的五档语气；旧 `spicy` 按 `brat` 处理。
 
 </details>
 
@@ -190,7 +277,7 @@ capture_command_output = false
 
 ### 性能
 
-在 macOS arm64 / Zsh 5.9 的一次本机验收中，干净 Zsh 与目标插件组合共 8 组场景，每组预热 30 次、采样 500 对，新增耗时 **p95 均低于 10ms**，最慢一组为 **6.27ms**。
+在 macOS arm64 / Zsh 5.9 的本机验收中，干净 Zsh 与目标插件组合共 8 组场景，每组预热 30 次、采样 500 对，新增耗时 **p95 均低于 10ms**，最慢一组为 **5.71ms**。当前角色与会话功能均已纳入测量，详见[验收记录](docs/milestones/brat-companion-acceptance.md)。
 
 测量覆盖从输入到下一提示符的完整往返，与无集成会话配对比较，包括 Hook、Core 启动及响应处理；启动时间单列，保留慢样本。该结果反映上述机器与配置，可用[性能脚本](tests/benchmark_hooks.py)在自己的环境中复测。
 
@@ -210,10 +297,10 @@ zako off
 永久停用时删除 `.zshrc` 中的 Zako 初始化块，并打开新终端。卸载可执行文件：
 
 ```sh
-cargo uninstall zakosh
+cargo uninstall zako
 ```
 
-Cargo 包名为 `zakosh`，安装的命令名为 `zako`。旧版独立 Shell 用户可参考[迁移说明](docs/migration.md)。
+Cargo 包名和命令名均为 `zako`。旧版独立 Shell 用户可参考[迁移说明](docs/migration.md)。
 
 ## 参与贡献
 

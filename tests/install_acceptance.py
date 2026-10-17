@@ -27,6 +27,8 @@ def main():
                 raise AssertionError(result.stderr)
             installed = Path(directory) / "bin/zako"
             assert installed.is_file()
+            packages = subprocess.check_output([cargo, "install", "--list", "--root", directory], text=True)
+            assert packages.startswith("zako v"), packages
             assert subprocess.check_output([str(installed), "--version"]) == subprocess.check_output([str(Path(args.binary).resolve()), "--version"])
             assert subprocess.check_output([str(installed), "init", "zsh"]) == subprocess.check_output([str(Path(args.binary).resolve()), "init", "zsh"])
             report["cases"].append({"name": "offline-source-install-and-bundled-integration", "status": "passed"})
@@ -40,11 +42,14 @@ def main():
                 assert shell.state()["owned"] == "1"
             report["cases"].append({"name": "installed-binary-new-shell-and-on-off", "status": "passed"})
             with Terminal(installed, "plugins", init="") as shell:
-                assert "♡ 哼" not in shell.startup
+                assert "♡ 嘿" not in shell.startup
                 assert "_zako_precmd" not in shell.command("print -r -- HOOKS:${(j:,:)precmd_functions}")
                 output_text = shell.command("print -r -- initialized=${_ZAKO_INITIALIZED-no}")
                 assert "\ninitialized=no\n" in output_text
             report["cases"].append({"name": "initialization-removed-in-new-shell", "status": "passed"})
+            subprocess.run([cargo, "uninstall", "zako", "--root", directory], check=True, capture_output=True, timeout=30)
+            assert not installed.exists()
+            report["cases"].append({"name": "cargo-package-name-and-uninstall", "status": "passed"})
         report["status"] = "passed"
     except Exception as error:
         report["status"] = "failed"

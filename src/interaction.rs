@@ -2,7 +2,7 @@ use crate::config::Config;
 use crate::context::{EventRequest, EventResponse, Mood};
 use crate::{correction, persona};
 
-pub fn event(request: EventRequest, config: &Config) -> EventResponse {
+pub fn event(mut request: EventRequest, config: &Config) -> EventResponse {
     let successful = request.exit_code == 0;
     let interrupted = matches!(request.exit_code, 130 | 148);
     let neutral = is_neutral_result(&request.command, request.exit_code);
@@ -53,18 +53,37 @@ pub fn event(request: EventRequest, config: &Config) -> EventResponse {
     } else {
         Mood::Annoyed
     };
-    let help = failures == 3 && config.interaction.consecutive_failure_tip;
-    let candidate = persona::event_message(
-        config,
-        mood,
-        if help { "help" } else { failure_class },
-        failures,
-    );
     let after_cooldown = request.last_interaction_ms == 0
         || request.now_ms.saturating_sub(request.last_interaction_ms)
             >= config.interaction.cooldown_seconds.saturating_mul(1000);
     let correction_priority = failure_class == "correctable";
-    let sampled = !successful
+    let help = failures == 3 && config.interaction.consecutive_failure_tip;
+    let feedback = request.stats.record(
+        failure_class,
+        &request.command,
+        request.now_ms,
+        config,
+        after_cooldown && config.interaction.profile != "quiet" && !correction_priority && !help,
+    );
+    let candidate = if !correction_priority && feedback.budget {
+        persona::special(config, "budget")
+    } else if !correction_priority && !help && feedback.achievement.is_some() {
+        persona::special(config, feedback.achievement.unwrap_or("persistent"))
+    } else {
+        persona::event_message(
+            config,
+            mood,
+            if help && !correction_priority {
+                "help"
+            } else {
+                failure_class
+            },
+            failures,
+            &request.command,
+        )
+    };
+    let sampled = feedback.achievement.is_some()
+        || !successful
         || config.interaction.profile == "chatty"
         || request.sample < f64::from(config.interaction.success_probability);
     let message = if config.general.enabled
@@ -77,13 +96,14 @@ pub fn event(request: EventRequest, config: &Config) -> EventResponse {
         String::new()
     };
     EventResponse {
-        protocol_version: 1,
+        protocol_version: 2,
         mood: mood.as_str().to_string(),
         consecutive_failures: failures,
         failure_class: failure_class.to_string(),
         message,
         suggestions,
         prompt_marker: persona::marker(mood, config.prompt.ascii_fallback),
+        stats_json: serde_json::to_string(&request.stats).unwrap_or_default(),
     }
 }
 
@@ -120,6 +140,7 @@ mod tests {
             now_ms: 100_000,
             last_interaction_ms: 0,
             sample: 0.0,
+            stats: crate::session::State::default(),
         }
     }
     #[test]

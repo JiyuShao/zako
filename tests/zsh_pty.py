@@ -45,6 +45,7 @@ class ZshAcceptance(unittest.TestCase):
         self.assertEqual(self.shell.state()["count"], "1")
         self.shell.command("true")
         self.assertEqual(self.shell.state()["count"], "0")
+
         self.shell.command("git comit")
         self.assertIn("建议：git commit", self.shell.command("zako fix"))
         self.assertFalse((self.shell.work / ".git/refs/heads/main").exists())
@@ -54,6 +55,51 @@ class ZshAcceptance(unittest.TestCase):
         self.shell.command("gti status")
         self.shell.command("zako status; true")
         self.assertEqual(self.shell.state()["count"], "0")
+
+    def test_session_stats_and_reset(self):
+        self.shell.command("true")
+        self.shell.command("false")
+        self.shell.command("gti status")
+        output = self.shell.command("zako stats")
+        self.assertIn("commands=3", output)
+        self.assertIn("successes=1", output)
+        self.assertIn("failures=2", output)
+        self.assertIn("corrections=1", output)
+        self.shell.command("gti status")
+        self.shell.command("zako stats reset")
+        output = self.shell.command("zako stats")
+        self.assertIn("commands=0 successes=0 failures=0 corrections=0", output)
+
+    def test_achievements_config_and_session_isolation(self):
+        config = '[interaction]\ncooldown_seconds=0\nsuccess_probability=1.0\n[session]\nsuccess_streak_goal=2\nfailure_milestone=2\n'
+        with Terminal(BINARY, PROFILE, ORDER, config=config) as other:
+            other.command("true")
+            self.assertIn("连胜小天才", other.command("true"))
+            self.assertNotIn("成就解锁", other.command("true"))
+            other.command("false")
+            self.assertIn("不服输的杂鱼", other.command("false"))
+            output = other.command("zako stats")
+            self.assertIn("other:2", output)
+            self.assertIn("best_streak=3", output)
+            other.command("zako off")
+            other.command("false")
+            other.command("zako on")
+            self.assertIn("commands=5", other.command("zako stats"))
+            other.command("zako stats reset")
+            other.command("true")
+            self.assertIn("连胜小天才", other.command("true"))
+            self.assertIn("commands=2", other.command("zako stats"))
+            self.assertIn('"commands":2', other.command("zako stats --json"))
+            other.command("gti status")
+            self.assertIn("已保存", other.command("zako config set persona.intensity 5"))
+            self.assertEqual(other.state()["count"], "1")
+            self.assertIn("intensity = 5", other.command("zako config show"))
+            self.assertEqual(other.state()["enabled"], "1")
+        self.assertIn("commands=0", self.shell.command("zako stats"))
+        with Terminal(BINARY, PROFILE, ORDER, config='[session]\nenabled=false\n[interaction]\nfailure_budget=false\n') as other:
+            other.command("false")
+            self.assertIn("已关闭", other.command("zako stats"))
+            self.assertEqual(other.state()["native"], "0")
 
     def test_multiple_candidates_and_empty_fields(self):
         self.shell.command("dat fixture")
@@ -104,8 +150,8 @@ class ZshAcceptance(unittest.TestCase):
         self.assertIn("连续失败 3", output)
         self.assertNotIn("连续失败", self.shell.command("false"))
         # Advance only the session timestamp, never change production defaults.
-        self.assertIn("命令没有成功", self.shell.command("_ZAKO_LAST_INTERACTION_MS=1; false"))
-        self.assertNotIn("命令没有成功", self.shell.command("false"))
+        self.assertIn("失败预算", self.shell.command("_ZAKO_LAST_INTERACTION_MS=1; false"))
+        self.assertNotIn("杂鱼", self.shell.command("false"))
         self.shell.command("true")
         self.assertEqual(self.shell.state()["failures"], "0")
 
@@ -127,7 +173,7 @@ class ZshAcceptance(unittest.TestCase):
         output = self.shell.command("print -r -- HOOKS:${(j:,:)precmd_functions}")
         actual = re.search(r"^HOOKS:([^\n]+)", output, re.M).group(1)
         self.assertEqual(actual.split(",").count("_zako_precmd"), 1)
-        self.assertEqual(self.shell.transcript.count("♡ 哼，今天也要本小姐陪你写代码？"), 1)
+        self.assertEqual(self.shell.transcript.count("♡ 嘿，杂鱼，今天也别把代码写坏了哦？"), 1)
         self.shell.command("setopt shwordsplit ksharrays")
         self.shell.command("false")
         self.assertNotIn("配置无效", self.shell.transcript)
@@ -148,7 +194,7 @@ class ZshAcceptance(unittest.TestCase):
     def test_initially_disabled_and_prompt_off(self):
         with Terminal(BINARY, PROFILE, ORDER, config='[general]\nenabled=false\n') as other:
             self.assertEqual(other.state()["enabled"], "0")
-            self.assertNotIn("♡ 哼", other.startup)
+            self.assertNotIn("♡ 嘿", other.startup)
             other.command("zako on")
             self.assertEqual(other.state()["enabled"], "1")
             other.command("false")
@@ -166,7 +212,7 @@ class ZshAcceptance(unittest.TestCase):
         self.assertEqual(result.stdout, "noninteractive-only\n")
         self.assertEqual(result.stderr, "")
         with Terminal(BINARY, PROFILE, ORDER, integration=False) as other:
-            self.assertNotIn("♡ 哼", other.startup)
+            self.assertNotIn("♡ 嘿", other.startup)
             self.assertEqual(other.state()["enabled"], "0")
             self.assertNotIn("_zako_precmd", other.command("print -r -- HOOKS:${(j:,:)precmd_functions}"))
 
@@ -178,11 +224,13 @@ class ZshAcceptance(unittest.TestCase):
             invalid_number = fields.copy(); invalid_number[2] = "$(touch SHOULD-NOT-EXECUTE)"
             invalid_marker = fields.copy(); invalid_marker[5] = "$(touch SHOULD-NOT-EXECUTE)"
             invalid_count = fields.copy(); invalid_count[6] = "3"
+            invalid_stats = fields.copy(); invalid_stats[13] = "$(touch SHOULD-NOT-EXECUTE)"
             cases = {
                 "partial-nonzero": f"printf '%s\\n' {shlex.quote(good)}; exit 7",
                 "malformed": "printf '9\\037idle\\037bogus\\nS:0\\n'",
                 "invalid-number": "printf '%s\\nS:0\\n' " + shlex.quote("\x1f".join(invalid_number)),
                 "invalid-marker": "printf '%s\\nS:0\\n' " + shlex.quote("\x1f".join(invalid_marker)),
+                "invalid-stats": "printf '%s\\nS:0\\n' " + shlex.quote("\x1f".join(invalid_stats)),
                 "invalid-count": "printf '%s\\nS:0\\n' " + shlex.quote("\x1f".join(invalid_count)),
                 "control": "printf '1\\037idle\\033[31m\\nS:0\\n'",
                 "hung": f"printf '%s' $$ > {shlex.quote(str(root / 'pid'))}; exec /bin/sleep 30",
@@ -307,7 +355,9 @@ def main():
                 "test_actual_ctrl_c", "test_command_status_and_hook_chain",
                 "test_expected_nonzero_and_real_errors", "test_multiple_candidates_and_empty_fields",
                 "test_on_off_prompt_and_user_takeover", "test_real_plugin_widgets_and_suggestions",
-                "test_real_tab_completion", "test_target_lifecycle_and_no_execution"}]
+                "test_real_tab_completion", "test_target_lifecycle_and_no_execution",
+                "test_session_stats_and_reset", "test_achievements_config_and_session_isolation",
+                "test_third_failure_cooldown_and_recovery"}]
         if args.case:
             unknown = set(args.case) - set(names)
             if unknown:

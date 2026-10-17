@@ -1,0 +1,41 @@
+# Zako 雌小鬼终端搭档。修改后新开终端生效。
+# 也可以使用：zako config set persona.intensity 5
+[general]
+enabled = true
+language = "zh-CN"
+
+[interaction]
+profile = "active"               # quiet | active | chatty
+success_probability = 0.35        # 0.0–1.0；chatty 忽略此概率
+cooldown_seconds = 20             # 普通反馈最小间隔，0–86400
+startup_greeting = true
+consecutive_failure_tip = true    # 第三次连续失败时提醒一次
+failure_escalation = true         # 失败次数越多，语气越强
+command_commentary = true         # Git/Cargo/Docker/rm/sudo 点评
+failure_budget = true             # 时间窗口内失败过多时提醒
+failure_budget_count = 5          # 2–100
+failure_window_seconds = 60       # 1–3600；预算提醒仍受冷却限制
+
+[persona]
+style = "brat"                   # gentle | normal | brat；兼容旧 spicy
+nickname = "杂鱼"                 # 对用户的称呼，最多 64 字
+intensity = 3                     # 1 轻逗、2 嘴硬、3 挑衅、4 奚落、5 火力全开
+
+[session]
+enabled = true                   # 会话统计；false 时也关闭成就
+achievements = true              # 每种成就每次会话/清零后只解锁一次
+success_streak_goal = 5           # 2–1000；连续成功成就
+failure_milestone = 10            # 2–1000；累计失败成就
+
+[prompt]
+mode = "auto"                    # auto | off
+ascii_fallback = true
+
+[correction]
+enabled = true
+max_suggestions = 3              # 1–3
+
+[privacy]
+persist_command_history = false
+telemetry = false
+capture_command_output = false

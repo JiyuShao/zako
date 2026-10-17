@@ -38,6 +38,7 @@ pub struct EventRequest {
     pub now_ms: u64,
     pub last_interaction_ms: u64,
     pub sample: f64,
+    pub stats: crate::session::State,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -49,4 +50,5 @@ pub struct EventResponse {
     pub message: String,
     pub suggestions: Vec<Suggestion>,
     pub prompt_marker: String,
+    pub stats_json: String,
 }

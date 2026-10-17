@@ -3,6 +3,8 @@
 Completion: passed
 Date: 2026-10-16
 
+本文件记录初始重构版本的历史快照。后续角色与会话功能的验收、当前安装结果见 [雌小鬼互动验收](brat-companion-acceptance.md)。
+
 已完成 7 项执行计划、正式本地安装和真实登录 Zsh 的端到端验收。验证平台为 macOS-26.5-arm64-arm-64bit-Mach-O，zsh 5.9 (arm64-apple-darwin25.0)，rustc 1.99.1 (58cf8f9c3 2026-10-13)。
 
 ## 完整门禁

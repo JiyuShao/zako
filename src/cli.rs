@@ -20,13 +20,15 @@ pub fn run(arguments: Vec<String>) -> Result<(), String> {
         }
         "init" => Err("用法：zako init zsh；M1 只支持 Zsh".into()),
         "event" => event(rest),
+        "config" => crate::config_commands::run(rest),
+        "stats" if !rest.is_empty() => stats(rest),
         "suggest" => suggest(rest),
         "session" => session(rest),
         "startup" => {
             let opts = Options::parse(rest, &[], &["--json"])?;
             let message = persona::startup(&load_config(&opts)?);
             if opts.has("--json") {
-                println!("{}", json!({"protocol_version":1,"message":message}));
+                println!("{}", json!({"protocol_version":2,"message":message}));
             } else if !message.is_empty() {
                 println!("{message}");
             }
@@ -56,7 +58,7 @@ pub fn run(arguments: Vec<String>) -> Result<(), String> {
             println!("manual prompt: add ${{_ZAKO_PROMPT_MARKER}} to your theme with prompt substitution enabled");
             Ok(())
         }
-        "fix" | "on" | "off" | "status" => {
+        "fix" | "on" | "off" | "status" | "stats" => {
             Err("请先在交互式 Zsh 中加载：eval \"$(zako init zsh)\"".into())
         }
         "--help" | "-h" | "help" => {
@@ -84,11 +86,11 @@ fn session(args: &[String]) -> Result<(), String> {
     if opts.has("--json") {
         println!(
             "{}",
-            json!({"protocol_version":1,"enabled":enabled,"prompt_mode":config.prompt.mode,"prompt_marker":marker,"message":greeting,"config_json":snapshot})
+            json!({"protocol_version":2,"enabled":enabled,"prompt_mode":config.prompt.mode,"prompt_marker":marker,"message":greeting,"config_json":snapshot})
         );
     } else {
         print_fields(&[
-            "1".into(),
+            "2".into(),
             u8::from(enabled).to_string(),
             config.prompt.mode,
             marker,
@@ -137,6 +139,7 @@ fn event(args: &[String]) -> Result<(), String> {
             "--last-interaction-ms",
             "--sample",
             "--config-json",
+            "--stats-json",
             "--protocol-version",
             "--event",
             "--elapsed-ms",
@@ -146,7 +149,7 @@ fn event(args: &[String]) -> Result<(), String> {
         ],
         &["--json"],
     )?;
-    if opts.number::<u32>("--protocol-version", "1")? != 1 {
+    if opts.number::<u32>("--protocol-version", "2")? != 2 {
         return Err("不支持的协议版本".into());
     }
     if opts.get("--event").is_some_and(|s| s != "command_finished") {
@@ -168,6 +171,7 @@ fn event(args: &[String]) -> Result<(), String> {
         now_ms: opts.number("--now-ms", "0")?,
         last_interaction_ms: opts.number("--last-interaction-ms", "0")?,
         sample,
+        stats: crate::session::State::parse(opts.get("--stats-json").unwrap_or("{}"))?,
     };
     let response = interaction::event(request, &load_config(&opts)?);
     if opts.has("--json") {
@@ -180,6 +184,20 @@ fn event(args: &[String]) -> Result<(), String> {
     }
     Ok(())
 }
+fn stats(args: &[String]) -> Result<(), String> {
+    let opts = Options::parse(args, &["--stats-json", "--config-json"], &["--json"])?;
+    let state = crate::session::State::parse(opts.required("--stats-json")?)?;
+    let config = load_config(&opts)?;
+    if opts.has("--json") {
+        println!(
+            "{}",
+            serde_json::to_string(&state).map_err(|e| e.to_string())?
+        );
+    } else {
+        println!("{}", state.summary(&config));
+    }
+    Ok(())
+}
 fn random_sample() -> Result<f64, String> {
     let mut bytes = [0u8; 4];
     std::fs::File::open("/dev/urandom")
@@ -189,7 +207,7 @@ fn random_sample() -> Result<f64, String> {
 }
 fn print_shell_response(response: &EventResponse) {
     let mut fields = vec![
-        "1".into(),
+        "2".into(),
         response.mood.clone(),
         response.consecutive_failures.to_string(),
         response.failure_class.clone(),
@@ -202,6 +220,7 @@ fn print_shell_response(response: &EventResponse) {
         fields.push(value.map(|s| s.command.clone()).unwrap_or_default());
         fields.push(value.map(|s| s.reason.clone()).unwrap_or_default());
     }
+    fields.push(response.stats_json.clone());
     print_fields(&fields);
 }
 fn print_fields(fields: &[String]) {
@@ -259,5 +278,5 @@ impl<'a> Options<'a> {
     }
 }
 fn print_help() {
-    println!("zako - Zsh Shell Companion\n\n  zako init zsh   输出初始化脚本\n  zako doctor     配置与当前会话排障\n  zako on/off     当前会话开关\n  zako status     当前会话状态\n  zako fix        查看建议；需要手动输入与执行\n\n离线运行，不接管 Tab，不自动执行，不保存命令历史。");
+    println!("zako - Zsh Shell Companion\n\n  zako init zsh   输出初始化脚本\n  zako doctor     配置与当前会话排障\n  zako on/off     当前会话开关\n  zako status     当前会话状态\n  zako stats      会话统计、排行、成就；stats reset 清零\n  zako config     path | show | init | set <section.field> <value>\n  zako fix        查看建议；需要手动输入与执行\n\n离线运行，不接管 Tab，不自动执行，不保存命令历史。");
 }

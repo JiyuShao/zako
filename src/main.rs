@@ -1,9 +1,11 @@
 mod cli;
 mod config;
+mod config_commands;
 mod context;
 mod correction;
 mod interaction;
 mod persona;
+mod session;
 
 fn main() {
     let mut arguments: Vec<String> = std::env::args().skip(1).collect();
